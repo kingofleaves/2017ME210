@@ -168,7 +168,7 @@ void handleLocomotion(States_t targetState) {
       // should be turning left (right wheel moving forward)
       if (!sensorCenterDark()) {
         locoState = STATE_TURN_RIGHT;
-        //locoState = STATE_MOVE_FORWARD_FROM_LEFT;
+        Serial.println("TR");
       }
       break;
       
@@ -177,7 +177,7 @@ void handleLocomotion(States_t targetState) {
       // should be turning right (left wheel moving forward)
       if (!sensorCenterDark()) {
         locoState = STATE_TURN_LEFT;
-        //locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
+        Serial.println("TL");
       }
       break;
       
@@ -187,6 +187,7 @@ void handleLocomotion(States_t targetState) {
       // Turning right on the spot
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_LEFT;
+        Serial.println("FFL");
       }
       break;
       
@@ -196,6 +197,7 @@ void handleLocomotion(States_t targetState) {
       // Turning left on the spot
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
+        Serial.println("FFR");
       }
       break;
 
@@ -206,6 +208,7 @@ void handleLocomotion(States_t targetState) {
         countLeft = 0;
         countRight = 0;
         locoState = STATE_MOVE_FORWARD_FROM_LEFT;
+        Serial.println("FFL, L:0 R:0");
       }
       break;
       
@@ -216,6 +219,7 @@ void handleLocomotion(States_t targetState) {
         countRight = 0;
         countLeft = 0;
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
+        Serial.println("FFR, L:0 R:0");
       }
       break;
       
@@ -224,6 +228,7 @@ void handleLocomotion(States_t targetState) {
       // Both wheels forward
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
+        Serial.println("FFR");
       }
       break;
     case STATE_JUNCTION_STOP:
@@ -231,6 +236,7 @@ void handleLocomotion(States_t targetState) {
       // Both wheels stop
       if (timerLaunchExpired()) {
         locoState = STATE_UTURN;
+        Serial.println("U-TURN");
       }
       break;
   }
@@ -329,18 +335,22 @@ void checkLeftRightSensors(void) {
   if (sensorRightDark() && countRightEnabled) {
     countRight ++;
     countRightEnabled = false;
+    Serial.println("R False. val = " + countRight);
   }
   if (!sensorRightDark() && !countRightEnabled) {
     countRightEnabled = true;
+    Serial.println("R True. val = " + countRight);
   }
 
   //Then check left sensor
   if (sensorLeftDark() && countLeftEnabled) {
     countLeft ++;
     countLeftEnabled = false;
+    Serial.println("L False. val = " + countLeft);
   }
   if (!sensorLeftDark() && !countLeftEnabled) {
     countLeftEnabled = true;
+    Serial.println("L True. val = " + countLeft);
   }
 }
 
@@ -349,11 +359,13 @@ void checkJunction(bool turnDirection) {
   if ((turnDirection == RIGHT_TURN) && sensorRightDark()) {
     //Turn Right
     locoState = STATE_JUNCTION_TURN_RIGHT;
+    Serial.println("JTR");
     handleTurnRight();
   }
   if ((turnDirection == LEFT_TURN) && sensorLeftDark()) {
     //Turn Left
     locoState = STATE_JUNCTION_TURN_LEFT;
+    Serial.println("JTL");
     handleTurnLeft();
   }
 }
