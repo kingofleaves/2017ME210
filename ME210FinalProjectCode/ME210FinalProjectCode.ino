@@ -20,12 +20,13 @@
 /*---------------Module Defines-----------------------------*/
 
 #define MOTOR_SPEED    150      // between 0 and 255
-#define MOTOR_TURN_SPEED  250   // between 0 and 255
+#define MOTOR_PULSE_SPEED  250   // between 0 and 255
+#define TEST_PULSE_MOTOR_SPEED 246 
 
-#define SENSOR_THRESHOLD_OFFSET 3*200 // 5/1024 * 3 * 200 ~= 2.9 V
+#define SENSOR_THRESHOLD_OFFSET 2*200 // 5/1024 * 2 * 200 ~= 2 V
 
-#define RIGHT_TURN true
-#define LEFT_TURN false
+#define RIGHT true
+#define LEFT false
 
 #define FORWARD LOW
 #define REVERSE HIGH
@@ -46,8 +47,8 @@
 #define TIMER_LAUNCH 0
 #define TIME_INTERVAL_LAUNCH 10000
 
-#define TIMER_TURN 1
-#define TIME_INTERVAL_TURN 20
+#define TIMER_PULSE 1
+#define TIME_INTERVAL_PULSE 20
 
 #define TURN_INCREMENT_RATIO 10
 
@@ -74,6 +75,7 @@ bool countLeftEnabled = true;
 bool turnDirection;
 unsigned int waitCount = 0;
 bool stateComplete = false;
+bool atJunction = false;
 
 
 /*---------------Module Function Prototypes-----------------*/
@@ -116,8 +118,8 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   if (state != STATE_OFF) {
-    checkGlobalEvents();
-    
+    //checkGlobalEvents();
+    handleForwardAim();
     // Debugging Code Below
 
 
@@ -161,7 +163,7 @@ void checkGlobalEvents(void) {
 
 void handleLocomotion(States_t targetState) {
   checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-  //checkJunction(RIGHT_TURN);    // check to see we are at a junction
+  if (!atJunction) checkJunction(RIGHT);    // check to see we are at a junction
   switch (locoState) {          // line following algorithm
     case STATE_MOVE_FORWARD_FROM_RIGHT:
       handleMoveForwardFromRight();
@@ -169,6 +171,7 @@ void handleLocomotion(States_t targetState) {
       if (!sensorCenterDark()) {
         locoState = STATE_TURN_RIGHT;
         Serial.println("TR");
+        delay(1000);
       }
       break;
       
@@ -178,6 +181,7 @@ void handleLocomotion(States_t targetState) {
       if (!sensorCenterDark()) {
         locoState = STATE_TURN_LEFT;
         Serial.println("TL");
+        delay(1000);
       }
       break;
       
@@ -188,6 +192,7 @@ void handleLocomotion(States_t targetState) {
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_LEFT;
         Serial.println("FFL");
+        delay(1000);
       }
       break;
       
@@ -198,6 +203,7 @@ void handleLocomotion(States_t targetState) {
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
         Serial.println("FFR");
+        delay(1000);
       }
       break;
 
@@ -208,7 +214,9 @@ void handleLocomotion(States_t targetState) {
         countLeft = 0;
         countRight = 0;
         locoState = STATE_MOVE_FORWARD_FROM_LEFT;
+        atJunction = false;
         Serial.println("FFL, L:0 R:0");
+        delay(1000);
       }
       break;
       
@@ -219,7 +227,9 @@ void handleLocomotion(States_t targetState) {
         countRight = 0;
         countLeft = 0;
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
+        atJunction = false;
         Serial.println("FFR, L:0 R:0");
+        delay(1000);
       }
       break;
       
@@ -229,6 +239,7 @@ void handleLocomotion(States_t targetState) {
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
         Serial.println("FFR");
+        delay(1000);
       }
       break;
     case STATE_JUNCTION_STOP:
@@ -237,6 +248,7 @@ void handleLocomotion(States_t targetState) {
       if (timerLaunchExpired()) {
         locoState = STATE_UTURN;
         Serial.println("U-TURN");
+        delay(1000);
       }
       break;
   }
@@ -248,9 +260,6 @@ void setupPins() {
   pinMode(PIN_MOTOR_RIGHT, OUTPUT);
   pinMode(PIN_MOTOR_LEFT_DIR, OUTPUT);
   pinMode(PIN_MOTOR_RIGHT_DIR, OUTPUT);
-  pinMode(PIN_SENSOR_LEFT, INPUT);
-  pinMode(PIN_SENSOR_RIGHT, INPUT);
-  pinMode(PIN_SENSOR_CENTER, INPUT);
 }
 
 void handleMoveForward(void) {
@@ -295,21 +304,27 @@ void handleTurnRight(void) {
 
 void handleTurnRightAim(void) {
   // Turns right in pulses
-  if (TMRArd_IsTimerExpired(TIMER_TURN)) {
+  if (TMRArd_IsTimerExpired(TIMER_PULSE)) {
     if (waitCount < TURN_INCREMENT_RATIO) {
       analogWrite(PIN_MOTOR_LEFT, 0);
       analogWrite(PIN_MOTOR_RIGHT, 0);
-      TMRArd_InitTimer(TIMER_TURN, TIME_INTERVAL_TURN);
+      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
       waitCount++;
     } else {
       digitalWrite(PIN_MOTOR_LEFT_DIR, FORWARD);
       digitalWrite(PIN_MOTOR_RIGHT_DIR, REVERSE);
-      analogWrite(PIN_MOTOR_LEFT, MOTOR_TURN_SPEED);
-      analogWrite(PIN_MOTOR_RIGHT, MOTOR_TURN_SPEED);
-      TMRArd_InitTimer(TIMER_TURN, TIME_INTERVAL_TURN);
+      analogWrite(PIN_MOTOR_LEFT, MOTOR_PULSE_SPEED);
+      analogWrite(PIN_MOTOR_RIGHT, MOTOR_PULSE_SPEED);
+      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
       waitCount = 0;
     }
   }
+}
+
+void handleForwardAim(void) {
+  // Moves Forward in pulses
+  handleMotor(LEFT, TEST_PULSE_MOTOR_SPEED, FORWARD);
+  handleMotor(RIGHT, TEST_PULSE_MOTOR_SPEED, FORWARD);
 }
 
 bool sensorCenterDark(void) {
@@ -335,37 +350,49 @@ void checkLeftRightSensors(void) {
   if (sensorRightDark() && countRightEnabled) {
     countRight ++;
     countRightEnabled = false;
-    Serial.println("R False. val = " + countRight);
+    Serial.print("R False. val = ");
+    Serial.println(countRight);
+    delay(1000);
   }
   if (!sensorRightDark() && !countRightEnabled) {
     countRightEnabled = true;
-    Serial.println("R True. val = " + countRight);
+    Serial.print("R True. val = ");
+    Serial.println(countRight);
+    delay(1000);
   }
 
   //Then check left sensor
   if (sensorLeftDark() && countLeftEnabled) {
     countLeft ++;
     countLeftEnabled = false;
-    Serial.println("L False. val = " + countLeft);
+    Serial.print("L False. val = ");
+    Serial.println(countLeft);
+    delay(1000);
   }
   if (!sensorLeftDark() && !countLeftEnabled) {
     countLeftEnabled = true;
-    Serial.println("L True. val = " + countLeft);
+    Serial.print("L True. val = ");
+    Serial.println(countLeft);
+    delay(1000);
   }
 }
 
 void checkJunction(bool turnDirection) {
   //checks for junction - if sensor towards the direction of turn goes over black tape, trigger turn.
-  if ((turnDirection == RIGHT_TURN) && sensorRightDark()) {
+  if ((turnDirection == RIGHT) && sensorRightDark()) {
     //Turn Right
     locoState = STATE_JUNCTION_TURN_RIGHT;
     Serial.println("JTR");
+    delay(1000);
+    atJunction = true;
     handleTurnRight();
   }
-  if ((turnDirection == LEFT_TURN) && sensorLeftDark()) {
+  if ((turnDirection == LEFT) && sensorLeftDark()) {
     //Turn Left
     locoState = STATE_JUNCTION_TURN_LEFT;
     Serial.println("JTL");
+    delay(1000);
+    atJunction = true;
     handleTurnLeft();
   }
 }
@@ -373,5 +400,37 @@ void checkJunction(bool turnDirection) {
 unsigned char timerLaunchExpired(void) {
   return (TMRArd_IsTimerExpired(TIMER_LAUNCH) == TMRArd_EXPIRED);
 }
+
+
+/**** WORK IN PROGRESS BELOW THIS LINE BY WANG YE *****/
+
+/***********************************
+ * Function: handleMotor
+ * arguments: targetMotor (LEFT, RIGHT), motorSpeed (0 - 255), spinDirection (FORWARD, REVERSE) 
+ * 
+ * 
+ * 
+ ***********************************/
+
+void handleMotor(bool targetMotor, unsigned int motorSpeed, bool spinDirection) {
+  if (TMRArd_IsTimerExpired(TIMER_PULSE)) {
+    int motorPin = (targetMotor == LEFT)  * PIN_MOTOR_LEFT + (targetMotor == RIGHT)  * PIN_MOTOR_RIGHT;
+    int motorDirPin = (targetMotor == LEFT)  * PIN_MOTOR_LEFT_DIR + (targetMotor == RIGHT)  * PIN_MOTOR_RIGHT_DIR;
+    if (waitCount = 255) waitCount = 0;
+    if (motorSpeed > 255) motorSpeed = 255;  //max motorSpeed is 255.
+    waitCount++;
+    
+    if (waitCount < 256 - motorSpeed) {
+      analogWrite(motorPin, 0);
+      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
+    } else {
+      digitalWrite(motorDirPin, spinDirection);
+      analogWrite(motorPin, MOTOR_PULSE_SPEED);
+      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
+      waitCount = 0;
+    }
+  }
+}
+
 
 
