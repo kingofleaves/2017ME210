@@ -21,15 +21,19 @@
 
 #define MOTOR_SPEED    150      // between 0 and 255
 #define MOTOR_PULSE_SPEED  250   // between 0 and 255
-#define TEST_PULSE_MOTOR_SPEED 246 
+#define TEST_PULSE_MOTOR_SPEED 250 
+
+#define TURN_INCREMENT_RATIO 10
 
 #define SENSOR_THRESHOLD_OFFSET 2*200 // 5/1024 * 2 * 200 ~= 2 V
 
-#define RIGHT true
-#define LEFT false
+#define RIGHT_TURN true
+#define LEFT_TURN false
 
-#define FORWARD LOW
-#define REVERSE HIGH
+#define FORWARD_OUTPUT LOW
+#define REVERSE_OUTPUT HIGH
+#define FORWARD false
+#define REVERSE true
 
 /*---------------PIN Defines--------------------------------*/
 
@@ -37,6 +41,8 @@
 #define PIN_SENSOR_CENTER 4
 #define PIN_SENSOR_RIGHT 5
 
+#define PIN_FLYWHEEL_LEFT 8
+#define PIN_FLYWHEEL_RIGHT 9
 #define PIN_MOTOR_LEFT 10
 #define PIN_MOTOR_RIGHT 11
 #define PIN_MOTOR_LEFT_DIR 12
@@ -50,7 +56,6 @@
 #define TIMER_PULSE 1
 #define TIME_INTERVAL_PULSE 20
 
-#define TURN_INCREMENT_RATIO 10
 
 
 
@@ -62,6 +67,10 @@ typedef enum {
 typedef enum {
   STATE_MOVE_FORWARD, STATE_MOVE_FORWARD_FROM_LEFT, STATE_MOVE_FORWARD_FROM_RIGHT, STATE_TURN_LEFT, STATE_TURN_RIGHT, STATE_JUNCTION_TURN_LEFT, STATE_JUNCTION_TURN_RIGHT, STATE_JUNCTION_STOP, STATE_UTURN
 } LocomotionStates_t;
+
+typedef enum {
+  STATE_FORWARD, STATE_REVERSE, STATE_LEFT, STATE_RIGHT, STATE_TURN_L, STATE_TURN_R
+} MotionStates_t;
 
 
 /*---------------Module Variables---------------------------*/
@@ -105,12 +114,16 @@ void checkLeftRightSensors(void);
 void setup() {
   Serial.begin(9600);
   setupPins();
+  
+  handleStop();
+  stopFlywheel();
   state = STATE_MOVE_LAUNCH;
   locoState = STATE_MOVE_FORWARD;
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
   TMRArd_StopTimer(TIMER_LAUNCH);
+  TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
 
-  handleMoveForward();
+  //handleMoveForward();
   //tapeThreshold = analogRead(PIN_SENSOR_CENTER) + SENSOR_THRESHOLD_OFFSET;
   tapeThreshold = SENSOR_THRESHOLD_OFFSET;
 }
@@ -119,6 +132,7 @@ void loop() {
   // put your main code here, to run repeatedly:
   if (state != STATE_OFF) {
     //checkGlobalEvents();
+    //handleTurnRightAim();
     handleForwardAim();
     // Debugging Code Below
 
@@ -163,14 +177,14 @@ void checkGlobalEvents(void) {
 
 void handleLocomotion(States_t targetState) {
   checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-  if (!atJunction) checkJunction(RIGHT);    // check to see we are at a junction
+  if (!atJunction) checkJunction(RIGHT_TURN);    // check to see we are at a junction
   switch (locoState) {          // line following algorithm
     case STATE_MOVE_FORWARD_FROM_RIGHT:
       handleMoveForwardFromRight();
       // should be turning left (right wheel moving forward)
       if (!sensorCenterDark()) {
         locoState = STATE_TURN_RIGHT;
-        Serial.println("TR");
+        //Serial.println("TR");
         delay(1000);
       }
       break;
@@ -180,7 +194,7 @@ void handleLocomotion(States_t targetState) {
       // should be turning right (left wheel moving forward)
       if (!sensorCenterDark()) {
         locoState = STATE_TURN_LEFT;
-        Serial.println("TL");
+        //Serial.println("TL");
         delay(1000);
       }
       break;
@@ -191,7 +205,7 @@ void handleLocomotion(States_t targetState) {
       // Turning right on the spot
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_LEFT;
-        Serial.println("FFL");
+        //Serial.println("FFL");
         delay(1000);
       }
       break;
@@ -202,7 +216,7 @@ void handleLocomotion(States_t targetState) {
       // Turning left on the spot
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
-        Serial.println("FFR");
+        //Serial.println("FFR");
         delay(1000);
       }
       break;
@@ -215,7 +229,7 @@ void handleLocomotion(States_t targetState) {
         countRight = 0;
         locoState = STATE_MOVE_FORWARD_FROM_LEFT;
         atJunction = false;
-        Serial.println("FFL, L:0 R:0");
+        //Serial.println("FFL, L:0 R:0");
         delay(1000);
       }
       break;
@@ -228,7 +242,7 @@ void handleLocomotion(States_t targetState) {
         countLeft = 0;
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
         atJunction = false;
-        Serial.println("FFR, L:0 R:0");
+        //Serial.println("FFR, L:0 R:0");
         delay(1000);
       }
       break;
@@ -238,7 +252,7 @@ void handleLocomotion(States_t targetState) {
       // Both wheels forward
       if (sensorCenterDark()) {
         locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
-        Serial.println("FFR");
+        //Serial.println("FFR");
         delay(1000);
       }
       break;
@@ -247,7 +261,7 @@ void handleLocomotion(States_t targetState) {
       // Both wheels stop
       if (timerLaunchExpired()) {
         locoState = STATE_UTURN;
-        Serial.println("U-TURN");
+        //Serial.println("U-TURN");
         delay(1000);
       }
       break;
@@ -260,6 +274,8 @@ void setupPins() {
   pinMode(PIN_MOTOR_RIGHT, OUTPUT);
   pinMode(PIN_MOTOR_LEFT_DIR, OUTPUT);
   pinMode(PIN_MOTOR_RIGHT_DIR, OUTPUT);
+  pinMode(PIN_FLYWHEEL_LEFT, OUTPUT);
+  pinMode(PIN_FLYWHEEL_RIGHT, OUTPUT);
 }
 
 void handleMoveForward(void) {
@@ -323,8 +339,9 @@ void handleTurnRightAim(void) {
 
 void handleForwardAim(void) {
   // Moves Forward in pulses
-  handleMotor(LEFT, TEST_PULSE_MOTOR_SPEED, FORWARD);
-  handleMotor(RIGHT, TEST_PULSE_MOTOR_SPEED, FORWARD);
+  if (TMRArd_IsTimerExpired(TIMER_PULSE)) {
+    handleMotors(STATE_FORWARD, TEST_PULSE_MOTOR_SPEED);
+  }
 }
 
 bool sensorCenterDark(void) {
@@ -350,14 +367,14 @@ void checkLeftRightSensors(void) {
   if (sensorRightDark() && countRightEnabled) {
     countRight ++;
     countRightEnabled = false;
-    Serial.print("R False. val = ");
-    Serial.println(countRight);
+    //Serial.print("R False. val = ");
+    //Serial.println(countRight);
     delay(1000);
   }
   if (!sensorRightDark() && !countRightEnabled) {
     countRightEnabled = true;
-    Serial.print("R True. val = ");
-    Serial.println(countRight);
+    //Serial.print("R True. val = ");
+    //Serial.println(countRight);
     delay(1000);
   }
 
@@ -365,32 +382,32 @@ void checkLeftRightSensors(void) {
   if (sensorLeftDark() && countLeftEnabled) {
     countLeft ++;
     countLeftEnabled = false;
-    Serial.print("L False. val = ");
-    Serial.println(countLeft);
+    //Serial.print("L False. val = ");
+    //Serial.println(countLeft);
     delay(1000);
   }
   if (!sensorLeftDark() && !countLeftEnabled) {
     countLeftEnabled = true;
-    Serial.print("L True. val = ");
-    Serial.println(countLeft);
+    //Serial.print("L True. val = ");
+    //Serial.println(countLeft);
     delay(1000);
   }
 }
 
 void checkJunction(bool turnDirection) {
   //checks for junction - if sensor towards the direction of turn goes over black tape, trigger turn.
-  if ((turnDirection == RIGHT) && sensorRightDark()) {
+  if ((turnDirection == RIGHT_TURN) && sensorRightDark()) {
     //Turn Right
     locoState = STATE_JUNCTION_TURN_RIGHT;
-    Serial.println("JTR");
+    //Serial.println("JTR");
     delay(1000);
     atJunction = true;
     handleTurnRight();
   }
-  if ((turnDirection == LEFT) && sensorLeftDark()) {
+  if ((turnDirection == LEFT_TURN) && sensorLeftDark()) {
     //Turn Left
     locoState = STATE_JUNCTION_TURN_LEFT;
-    Serial.println("JTL");
+    //Serial.println("JTL");
     delay(1000);
     atJunction = true;
     handleTurnLeft();
@@ -401,35 +418,55 @@ unsigned char timerLaunchExpired(void) {
   return (TMRArd_IsTimerExpired(TIMER_LAUNCH) == TMRArd_EXPIRED);
 }
 
+void stopFlywheel(void) {
+  digitalWrite(PIN_FLYWHEEL_RIGHT, LOW);
+  digitalWrite(PIN_FLYWHEEL_LEFT, LOW);
+}
 
 /**** WORK IN PROGRESS BELOW THIS LINE BY WANG YE *****/
 
 /***********************************
- * Function: handleMotor
- * arguments: targetMotor (LEFT, RIGHT), motorSpeed (0 - 255), spinDirection (FORWARD, REVERSE) 
+ * Function: handleMotors
+ * arguments: motion (FORWARD, REVERSE, LEFT, RIGHT, TURN_L, TURN_R), motorSpeed (0 - 255)
  * 
  * 
  * 
  ***********************************/
 
-void handleMotor(bool targetMotor, unsigned int motorSpeed, bool spinDirection) {
-  if (TMRArd_IsTimerExpired(TIMER_PULSE)) {
-    int motorPin = (targetMotor == LEFT)  * PIN_MOTOR_LEFT + (targetMotor == RIGHT)  * PIN_MOTOR_RIGHT;
-    int motorDirPin = (targetMotor == LEFT)  * PIN_MOTOR_LEFT_DIR + (targetMotor == RIGHT)  * PIN_MOTOR_RIGHT_DIR;
-    if (waitCount = 255) waitCount = 0;
+void handleMotors(MotionStates_t currState, unsigned int motorSpeed) {
+    if (waitCount == 255) waitCount = 0;
     if (motorSpeed > 255) motorSpeed = 255;  //max motorSpeed is 255.
     waitCount++;
+    //Serial.println(waitCount);
     
     if (waitCount < 256 - motorSpeed) {
-      analogWrite(motorPin, 0);
-      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
+      analogWrite(PIN_MOTOR_LEFT, 0);
+      analogWrite(PIN_MOTOR_RIGHT, 0);
     } else {
-      digitalWrite(motorDirPin, spinDirection);
-      analogWrite(motorPin, MOTOR_PULSE_SPEED);
-      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
+      if (currState == STATE_FORWARD || currState == STATE_RIGHT || currState == STATE_TURN_R) {
+        digitalWrite(PIN_MOTOR_LEFT, FORWARD_OUTPUT);
+      } else {
+        digitalWrite(PIN_MOTOR_LEFT, REVERSE_OUTPUT);
+      }
+      if (currState == STATE_FORWARD || currState == STATE_LEFT || currState == STATE_TURN_L) {
+        digitalWrite(PIN_MOTOR_RIGHT, FORWARD_OUTPUT);
+      } else {
+        digitalWrite(PIN_MOTOR_RIGHT, REVERSE_OUTPUT);
+      }
+      if (currState == STATE_LEFT) {
+         analogWrite(PIN_MOTOR_LEFT, 0);
+      } else {
+        analogWrite(PIN_MOTOR_LEFT, MOTOR_PULSE_SPEED);
+      }
+      if (currState == STATE_RIGHT) {
+         analogWrite(PIN_MOTOR_RIGHT, 0);
+      } else {
+        analogWrite(PIN_MOTOR_RIGHT, MOTOR_PULSE_SPEED);
+      }
       waitCount = 0;
     }
-  }
+    TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
+
 }
 
 
