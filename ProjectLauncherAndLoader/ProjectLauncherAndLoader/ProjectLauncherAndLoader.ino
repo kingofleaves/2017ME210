@@ -29,11 +29,18 @@
 
 // Interrupts
 
+// Other
+#define ONE_EIGHTH 10
+#define ONE_QUARTER 33    // 53
+#define TIME_PERIOD 1
+#define SPEED 200
+
 // Timers
 #define TIMER_PWM 1
 
 
 /*---------------Module Function Prototypes-----------------*/
+
 
 void SetupPins(void);                                       // Allocates pin #s with their purpose
 void PWM(void);                                             // PWM function for the DC motor 
@@ -46,6 +53,10 @@ int isDCOn = 0;
 
 int dir = 0;                                                // Initial direction is LOW
 
+int potReading =  SPEED;                                    // PROPORTIONAL TO SPEED 
+unsigned int stepPeriod = 30 + potReading*0.94819;          // period to be sent 
+
+
 /*---------------Lab 1 Main Functions-----------------------*/
 
 void setup() {
@@ -53,13 +64,15 @@ void setup() {
   SetupPins();
   TMRArd_InitTimer(TIMER_PWM, 1000);
   digitalWrite(PIN_DIR, LOW);                               // Set initial dir pin to LOW 
+  InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
 
 }
 
 void loop() {
   PWM(); 
-  Step();  
-  Direc();
+  Pulse(ONE_QUARTER);
+  delay(TIME_PERIOD); 
+
 }
 
 /*----------------Module Functions--------------------------*/
