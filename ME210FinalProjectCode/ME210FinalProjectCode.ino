@@ -16,11 +16,12 @@
 /*---------------Includes-----------------------------------*/
 
 #include <Timers.h>
+#include <Pulse.h>
 
 /*---------------Module Defines-----------------------------*/
 
 #define MOTOR_SPEED    150      // between 0 and 255
-#define MOTOR_PULSE_SPEED  200   // between 0 and 255
+#define MOTOR_PULSE_SPEED  215   // between 0 and 255 // AW: changed from 200 -> 215
 #define FORWARD_SPEED 253
 #define TURN_SPEED 253
 #define FORWARD_PULSE 40
@@ -41,16 +42,29 @@
 
 /*---------------PIN Defines--------------------------------*/
 
-#define PIN_SENSOR_LEFT 3
-#define PIN_SENSOR_CENTER 2
-#define PIN_SENSOR_RIGHT 5
+#define PIN_SENSOR_LEFT A3
+#define PIN_SENSOR_CENTER A2
+#define PIN_SENSOR_RIGHT A5
 
-#define PIN_FLYWHEEL_LEFT 8
-#define PIN_FLYWHEEL_RIGHT 9
+#define PIN_LAUNCHER_LEFT 8
+#define PIN_LAUNCHER_RIGHT 9
 #define PIN_MOTOR_LEFT 10
 #define PIN_MOTOR_RIGHT 11
 #define PIN_MOTOR_LEFT_DIR 12
 #define PIN_MOTOR_RIGHT_DIR 13
+
+// loader digital pins
+#define PIN_STEP 5
+#define PIN_DIR 3 
+
+/*---------------Other Defines------------------------------*/
+
+
+// Other
+#define ONE_QUARTER 33    // 53
+#define TIME_PERIOD 1
+#define SPEED 200
+
 
 /*---------------Timer Defines------------------------------*/
 
@@ -61,6 +75,9 @@
 
 #define TIMER_ATJUNCTION 2
 #define TIME_INTERVAL_ATJUNCTION 10000
+
+#define TIMER_PWM 1
+
 
 
 
@@ -96,6 +113,12 @@ bool stateComplete = false;
 bool atJunction = false;
 bool atT = false;
 
+//launcher loader
+int isDCOn = 0; 
+int dir = 0;                                                // Initial direction is LOW
+int potReading =  SPEED;                                    // PROPORTIONAL TO SPEED 
+unsigned int stepPeriod = 30 + potReading*0.94819;          // period to be sent 
+
 
 /*---------------Module Function Prototypes-----------------*/
 void SetupPins(void);
@@ -108,7 +131,11 @@ bool sensorCenterDark(void);
 bool sensorRightDark(void);
 bool sensorLeftDark(void);
 void checkLeftRightSensors(void);
-
+void activateLauncherAndLoader(void);
+//launcher loader
+void PWM(void);                                             // PWM function for the DC motor
+//initial alignment
+void rotateUntilIR(void);
 
 /*---------------Raptor Main Functions----------------*/
 
@@ -125,15 +152,18 @@ void setup() {
   TMRArd_InitTimer(TIMER_PULSE, FORWARD_PULSE);
   TMRArd_InitTimer(TIMER_ATJUNCTION, TIME_INTERVAL_ATJUNCTION);
   tapeThreshold = SENSOR_THRESHOLD_OFFSET;
-  
+
+  //launcher loader
+  TMRArd_InitTimer(TIMER_PWM, 1000);
+  digitalWrite(PIN_DIR, LOW);                               // Set initial dir pin to LOW 
 }
 
 void loop() {
   if (state != STATE_OFF) {
     //checkGlobalEvents();
- 
+    activateLauncherAndLoader(); 
     // Debugging Code Below
-    handleLineFollowing();
+    //handleLineFollowing();
     checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
     checkJunction(STATE_TURN_L);
     //Serial.println("looping");
@@ -213,6 +243,11 @@ void handleJunctionTurn(MotionStates_t turnDirection) {
   //Proceed to line-following again.
 }
 
+/** STILL TESTING **/
+void rotateUntilIR(void) {
+  
+}
+
 /** TESTED AND WORKING **/
 void checkJunction(MotionStates_t turnDirection) {
   //checks for junction - if sensor towards the direction of turn goes over black tape, trigger turn.
@@ -255,8 +290,12 @@ void setupPins() {
   pinMode(PIN_MOTOR_RIGHT, OUTPUT);
   pinMode(PIN_MOTOR_LEFT_DIR, OUTPUT);
   pinMode(PIN_MOTOR_RIGHT_DIR, OUTPUT);
-  pinMode(PIN_FLYWHEEL_LEFT, OUTPUT);
-  pinMode(PIN_FLYWHEEL_RIGHT, OUTPUT);
+  pinMode(PIN_LAUNCHER_LEFT, OUTPUT); 
+  pinMode(PIN_LAUNCHER_RIGHT, OUTPUT); 
+  pinMode(PIN_STEP, OUTPUT); 
+  pinMode(PIN_DIR, OUTPUT); 
+
+
 }
 
 /** Tested and working **/
@@ -317,8 +356,8 @@ unsigned char timerLaunchExpired(void) {
 
 /** Tested and working **/
 void stopFlywheel(void) {
-  digitalWrite(PIN_FLYWHEEL_RIGHT, LOW);
-  digitalWrite(PIN_FLYWHEEL_LEFT, LOW);
+  digitalWrite(PIN_LAUNCHER_RIGHT, LOW);
+  digitalWrite(PIN_LAUNCHER_LEFT, LOW);
 }
 
 /***********************************
@@ -372,6 +411,36 @@ void handleMotors(MotionStates_t currState, unsigned int motorSpeed, unsigned in
     }
     TMRArd_InitTimer(TIMER_PULSE, pulseDur);
   }
+}
+
+/** TESTED AND WORKING **/
+void activateLauncherAndLoader() {
+  InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
+  while (true) {
+    PWM(); 
+    Pulse(ONE_QUARTER);
+    delay(TIME_PERIOD); 
+  }
+}
+
+// This function handles the loader PWM
+void PWM(){
+  if (TMRArd_IsTimerExpired(TIMER_PWM)){                    // if timer is expired..
+    int launcherSpeed = 1020;                                     // read new pot value
+        if (isDCOn){                                          // then, if DC is on..
+        digitalWrite(PIN_LAUNCHER_RIGHT, LOW);                            // turn it off
+        digitalWrite(PIN_LAUNCHER_LEFT, LOW);
+        isDCOn = 0;                                          
+        TMRArd_InitTimer(TIMER_PWM,(1023-launcherSpeed)/100);     // and reset the timer 
+        }
+        
+        else {                                                // if DC is off.. 
+        digitalWrite(PIN_LAUNCHER_RIGHT, HIGH);                           // turn it on
+        digitalWrite(PIN_LAUNCHER_LEFT, HIGH);
+        isDCOn = 1;
+        TMRArd_InitTimer(TIMER_PWM,launcherSpeed/100);            // and reset the timer 
+        }
+  }   
 }
 
 /**** old functions that are replaced by others ****/

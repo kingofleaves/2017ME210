@@ -55,7 +55,7 @@ unsigned int stepPeriod = 30 + potReading*0.94819;          // period to be sent
 void setup() {
   Serial.begin(9600);
   SetupPins();
-  digitalWrite(PIN_DIR, HIGH);                               // Set initial dir pin to LOW 
+  digitalWrite(PIN_DIR, LOW);                               // Set initial dir pin to LOW 
   InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
 
 
@@ -64,8 +64,7 @@ void setup() {
 void loop() {
   
   Pulse(ONE_QUARTER);
-  delay(TIME_PERIOD); 
-
+  delay(TIME_PERIOD);
 }
 
 /*----------------Module Functions--------------------------*/
