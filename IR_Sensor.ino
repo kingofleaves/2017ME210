@@ -7,7 +7,7 @@
  ************************************************************/
 
 /*---------------Module Defines-----------------------------*/
-#define IR_REAR A2                                                // CHANGE AS NECESSARY
+#define IR_REAR A1                                                // CHANGE AS NECESSARY
 #define IRRearThreshold 600                                       // CHANGE THIS THRESHOLD AS NECESSARY (max possible is around 760ish, if railing is 3.6V)
 
 /*---------------Module Function Prototypes-----------------*/
@@ -26,8 +26,8 @@ void setup() {
 
 void loop() {
   int output = ScanIRRear(); 
-  // Serial.println(IRRearReading);
-  Serial.println(output); 
+  Serial.println(IRRearReading);
+  // Serial.println(output); 
 }
 
 /*----------------Module Functions--------------------------*/
