@@ -3,7 +3,7 @@
   Contents:  This program is a warmup for ME210 Lab 0, and
              serves as an introduction to event-driven programming
   Notes:     Target: Arduino Leonardo
-             Arduino IDE version: 1.6.7
+stage             Arduino IDE version: 1.6.7
 
   History:
   when       who  what/why
@@ -72,6 +72,7 @@
 #define TIME_INTERVAL_LAUNCH 10000
 
 #define TIMER_PULSE 1
+#define TIMER_STAGE_4 4
 
 #define TIMER_ATJUNCTION 2
 #define TIME_INTERVAL_ATJUNCTION 10000
@@ -127,6 +128,9 @@ void activateLauncherAndLoader(void);
 void PWM(void);                                             // PWM function for the DC motor
 //initial alignment
 void rotateUntilIR(void);
+//stage 4
+void stage4(void);
+void stage5(void);
 
 /*---------------Raptor Main Functions----------------*/
 
@@ -153,7 +157,8 @@ void loop() {
     //checkGlobalEvents();
     //activateLauncherAndLoader(); 
     // Debugging Code Below
-    handleLineFollowing();
+    stage4();
+    //handleLineFollowing();
     checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
     checkJunction(STATE_PIVOT_R);
     //Serial.println("looping");
@@ -415,12 +420,29 @@ void activateLauncherAndLoader() {
   }
 }
 
-//void stage4() {
+void stage4() {
+  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleLineFollowing();
+  }
+  TMRArd_InitTimer(TIMER_STAGE_4, 5000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*4);
+  }
+  activateLauncherAndLoader();
 //  TMRArd_InitTimer(TIMER_STAGE_4, 1000);
-//  while (TMRArd_IsTimerActive(TIMER_STAGE_4)) {
-//    handleLineFollowing
+//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+//    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
 //  }
-//}
+}
+
+void stage5() {
+  bool isJunctionReached = false;
+  while (!isJunctionReached) {
+    handleLineFollowing();
+    checkJunction(STATE_PIVOT_R);
+  }
+}
 
 // This function handles the loader PWM
 void PWM(){
