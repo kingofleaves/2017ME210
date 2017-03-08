@@ -181,7 +181,7 @@ void checkGlobalEvents(void) {
 }
 
 
-/** ready to test **/
+/** TESTED AND WORKING **/
 void handleJunctionTurn(MotionStates_t turnDirection) {
   // called when both left and right sensors (and center) are dark/on tape. Blocks response until robot turns to adjacent tape.
   Serial.println("Entered Turn");
@@ -213,7 +213,7 @@ void handleJunctionTurn(MotionStates_t turnDirection) {
   //Proceed to line-following again.
 }
 
-/** WORK IN PROGRESS **/
+/** TESTED AND WORKING **/
 void checkJunction(MotionStates_t turnDirection) {
   //checks for junction - if sensor towards the direction of turn goes over black tape, trigger turn.
   if (!atJunction) {
@@ -238,7 +238,7 @@ void checkJunction(MotionStates_t turnDirection) {
 }
 
 
-/** ready to test **/
+/** TESTED AND WORKING **/
 void handleLineFollowing(void) {
 // Code to follow when doing line following
   if(sensorCenterDark()) {
