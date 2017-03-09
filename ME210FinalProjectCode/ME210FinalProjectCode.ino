@@ -21,11 +21,11 @@ stage             Arduino IDE version: 1.6.7
 /*---------------Module Defines-----------------------------*/
 
 #define MOTOR_SPEED    150      // between 0 and 255
-#define MOTOR_PULSE_SPEED  250  // between 0 and 255 // AW: changed from 200 -> 215
+#define MOTOR_PULSE_SPEED  255  // between 0 and 255 // AW: changed from 200 -> 215
 #define FORWARD_INTERVAL 3
-#define TURN_INTERVAL 3
-#define FORWARD_PULSE 30
-#define TURN_PULSE 20
+#define TURN_INTERVAL 5
+#define FORWARD_PULSE 40
+#define TURN_PULSE 30
 
 
 #define TURN_INCREMENT_RATIO 10
@@ -107,7 +107,8 @@ bool stateComplete = false;
 bool atJunction = false;
 bool atT = false;
 int leftDifferential = 0;
-int rightDifferential = 0;
+int rightDifferential = -10;
+
 //launcher loader
 int isDCOn = 0; 
 int dir = 0;                                                // Initial direction is LOW
@@ -366,9 +367,9 @@ void stage2() {
   while (!atJunction) {
     handleLineFollowing();
     checkLeftRightSensors();
-    checkJunction(STATE_PIVOT_R);
+    checkJunction(STATE_PIVOT_L);
   }
-  state = STATE_UTURN;
+  state = STATE_MOVE_FACTCHECK;
 }
 
 void stage3() {
@@ -392,23 +393,32 @@ void stage4() {
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleLineFollowing();
   }
-  TMRArd_InitTimer(TIMER_STAGE_4, 5000);
+  leftDifferential -= 10;
+  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*7);
+    handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
   }
+  leftDifferential -= 35;
   //activateLauncherandLoader();
-  TMRArd_InitTimer(TIMER_STAGE_4, 1000);
+  TMRArd_InitTimer(TIMER_STAGE_4, 500);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
+    handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
   }
+  leftDifferential += 45;
   state=STATE_MOVE_LAUNCH;
 }
 
 void stage5() {
+  countLeft = countRight = 0;
+  atJunction = false;
   handleLineFollowing();
   checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-  checkJunction(STATE_FORWARD);
-  state = STATE_LAUNCH;
+  if ((countLeft && countLeftEnabled) || (countRight && countRightEnabled)) {
+    checkJunction(STATE_FORWARD);
+  }
+  if(atJunction){
+    state = STATE_LAUNCH;
+  }
 }
 
 void stage6() {
@@ -503,7 +513,7 @@ void handleMotors(MotionStates_t currState, unsigned int pulseInterval, unsigned
         analogWrite(PIN_MOTOR_RIGHT, 0);
         //Serial.println("RIGHT 0");
       } else {
-        analogWrite(PIN_MOTOR_RIGHT, MOTOR_PULSE_SPEED);
+        analogWrite(PIN_MOTOR_RIGHT, MOTOR_PULSE_SPEED + rightDifferential);
         //Serial.println("RIGHT ++");
       }
       if (currState == STATE_STOP) {
