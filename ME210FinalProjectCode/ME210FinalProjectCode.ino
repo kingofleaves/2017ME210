@@ -69,7 +69,7 @@ stage             Arduino IDE version: 1.6.7
 /*---------------Timer Defines------------------------------*/
 
 #define TIMER_LAUNCH 0
-#define TIME_INTERVAL_LAUNCH 10000
+#define TIME_INTERVAL_LAUNCH 2000
 
 #define TIMER_PULSE 1
 #define TIMER_STAGE_4 4
@@ -372,7 +372,7 @@ void stage2() {
   }
   rightDifferential -= 0;
   //move back then move forward and align
-  leftDifferential -= 10;
+  leftDifferential -= 25;
   TMRArd_InitTimer(TIMER_STAGE_4, 3000);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleLineFollowing();
@@ -381,11 +381,11 @@ void stage2() {
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
   }
+  leftDifferential +=25;
   TMRArd_InitTimer(TIMER_STAGE_4, 200);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleMotors(STATE_REVERSE, 256, FORWARD_PULSE);
   }
-  leftDifferential +=10;
   //activateLauncherandLoader();
   atJunction = false;
   state = STATE_MOVE_LAUNCH;
@@ -450,10 +450,12 @@ void stage5() {
 
 void stage6() {
   activateLauncherAndLoader();
-  state = STATE_RETURN;
+//  state = STATE_RETURN;
 //  leftDifferential = 30;
-  handleJunctionTurn(STATE_PIVOT_L);
-  atT = true;
+  handleJunctionTurn(STATE_PIVOT_R);
+  isJunction = true;
+  TMRArd_InitTimer(TIMER_ATJUNCTION, TIME_INTERVAL_ATJUNCTION);
+  state = STATE_TO_FIRST_JUNCTION;
 }
 
 /*** IN PROGRESS ***/
