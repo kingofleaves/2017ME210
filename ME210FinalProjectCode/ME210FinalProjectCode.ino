@@ -88,7 +88,7 @@ typedef enum {
 } States_t;
 
 typedef enum {
-  STATE_FORWARD, STATE_REVERSE, STATE_LEFT, STATE_RIGHT, STATE_PIVOT_L, STATE_PIVOT_R
+  STATE_FORWARD, STATE_REVERSE, STATE_LEFT, STATE_RIGHT, STATE_PIVOT_L, STATE_PIVOT_R, STATE_STOP
 } MotionStates_t;
 
 
@@ -129,6 +129,8 @@ void PWM(void);                                             // PWM function for 
 //initial alignment
 void rotateUntilIR(void);
 //stage 4
+void stage2(void);
+void stage3(void);
 void stage4(void);
 void stage5(void);
 
@@ -157,7 +159,11 @@ void loop() {
     //checkGlobalEvents();
     //activateLauncherAndLoader(); 
     // Debugging Code Below
-    stage4();
+    //stage4();
+    Serial.println("Entering Stage 2");
+    stage2();
+    Serial.println("Entering Stage 3");
+    stage3();
     //handleLineFollowing();
     checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
     checkJunction(STATE_PIVOT_R);
@@ -212,7 +218,7 @@ void handleJunctionTurn(MotionStates_t turnDirection) {
   Serial.println("Entered Turn");
   Serial.println(analogRead(PIN_SENSOR_RIGHT));
   Serial.println(analogRead(PIN_SENSOR_LEFT));
-  if ( (turnDirection == STATE_PIVOT_R) || atT) {
+  if ((turnDirection == STATE_PIVOT_R) || atT) {
     while (!sensorCenterDark()) {
       handleMotors(turnDirection, TURN_INTERVAL, TURN_PULSE);
       // Turn right till center sensor captures tape to the right.
@@ -234,17 +240,12 @@ void handleJunctionTurn(MotionStates_t turnDirection) {
   }
   countLeft = 0;
   countRight = 0;
-  if (state = STATE_MOVE_FACTCHECK) {
-    atT = true;
-  }
-  
+  if (turnDirection == STATE_STOP) {
+    handleMotors(turnDirection, 0, 0);
+  }  
   //Proceed to line-following again.
 }
 
-/** STILL TESTING **/
-void rotateUntilIR(void) {
-  
-}
 
 /** TESTED AND WORKING **/
 void checkJunction(MotionStates_t turnDirection) {
@@ -404,6 +405,10 @@ void handleMotors(MotionStates_t currState, unsigned int pulseInterval, unsigned
         analogWrite(PIN_MOTOR_RIGHT, MOTOR_PULSE_SPEED);
         //Serial.println("RIGHT ++");
       }
+      if (currState == STATE_STOP) {
+        analogWrite(PIN_MOTOR_RIGHT, 0);
+        analogWrite(PIN_MOTOR_LEFT, 0);
+      }
       waitCount = 0;
     }
     TMRArd_InitTimer(TIMER_PULSE, pulseDur);
@@ -420,6 +425,22 @@ void activateLauncherAndLoader() {
   }
 }
 
+void stage2() {
+  while (!atJunction) {
+    handleLineFollowing();
+    checkJunction(STATE_PIVOT_R);
+  }
+}
+
+void stage3() {
+  atT=true;
+  while (!atJunction) {
+    handleLineFollowing();
+    checkJunction(STATE_PIVOT_R);
+  }
+  atT=false;
+}
+
 void stage4() {
   TMRArd_InitTimer(TIMER_STAGE_4, 4000);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
@@ -430,10 +451,10 @@ void stage4() {
     handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*4);
   }
   activateLauncherAndLoader();
-//  TMRArd_InitTimer(TIMER_STAGE_4, 1000);
-//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-//    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
-//  }
+  TMRArd_InitTimer(TIMER_STAGE_4, 1000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
+  }
 }
 
 void stage5() {
