@@ -73,11 +73,12 @@ stage             Arduino IDE version: 1.6.7
 
 #define TIMER_PULSE 1
 #define TIMER_STAGE_4 4
+#define TIMER_BETWEEN_JUNCTIONS 3
 
 #define TIMER_ATJUNCTION 2
 #define TIME_INTERVAL_ATJUNCTION 5000
 
-#define TIMER_PWM 1
+#define TIMER_PWM 5
 
 #define STOP_INTERVAL 256
 
@@ -108,6 +109,7 @@ bool atJunction = false;
 bool atT = false;
 int leftDifferential = 0;
 int rightDifferential = -30;
+int junctionCount = 0;
 
 //launcher loader
 int isDCOn = 0; 
@@ -178,9 +180,9 @@ void loop() {
     case STATE_LAUNCH:
       stage6();
       break;
-    case STATE_RETURN:
-      stage7();
-      break;
+//    case STATE_RETURN:
+//      stage7();
+//      break;
     default:
       handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
       break;
@@ -242,6 +244,9 @@ void checkJunction(MotionStates_t turnDirection) {
     if (sensorRightDark() && sensorLeftDark()) {
       atJunction = true;
       if (state == STATE_MOVE_LAUNCH) {
+        while (!sensorCenterDark()) {
+          handleLineFollowing();
+        }
         handleMotors(STATE_PIVOT_R, STOP_INTERVAL, TURN_PULSE);
       } else {
         handleJunctionTurn(turnDirection);
@@ -355,6 +360,7 @@ void stopFlywheel(void) {
 void activateLauncherAndLoader() {
   InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
+  bool isLeft = true;
   while (!TMRArd_IsTimerExpired(TIMER_LAUNCH)) {
     PWM(); 
     Pulse(ONE_QUARTER);
@@ -418,24 +424,24 @@ void stage3() {
 }
 
 void stage4() {
-//  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
-//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-//    handleLineFollowing();
-//  }
-//  leftDifferential -= 10;
-//  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
-//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-//    handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
-//  }
-//  leftDifferential -= 35;
-//  //activateLauncherandLoader();
-//  TMRArd_InitTimer(TIMER_STAGE_4, 500);
-//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-//    handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
-//  }
-//  
-//  leftDifferential += 45;
-//  state=STATE_MOVE_LAUNCH;
+  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleLineFollowing();
+  }
+  leftDifferential -= 10;
+  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
+  }
+  leftDifferential -= 35;
+  //activateLauncherandLoader();
+  TMRArd_InitTimer(TIMER_STAGE_4, 500);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
+  }
+  
+  leftDifferential += 45;
+  state=STATE_MOVE_LAUNCH;
 }
 
 void stage5() {
@@ -458,9 +464,19 @@ void stage6() {
   delay(3000);
   stopFlywheel();
   leftDifferential = 0;
-  rightDifferential = -30;
-  handleJunctionTurn(STATE_PIVOT_R);
-  state = STATE_TO_FIRST_JUNCTION;
+  rightDifferential = 0;
+  if (junctionCount!=1) {
+    handleJunctionTurn(STATE_PIVOT_R);
+    state = STATE_TO_FIRST_JUNCTION;
+    TMRArd_InitTimer(TIMER_BETWEEN_JUNCTIONS, 10000);
+    while (!TMRArd_IsTimerExpired(TIMER_BETWEEN_JUNCTIONS)) {
+      handleLineFollowing();
+    }
+    junctionCount++;
+  } else {
+    state = STATE_MOVE_FACTCHECK;
+  }
+  atJunction = false;
 }
 
 /*** IN PROGRESS ***/
