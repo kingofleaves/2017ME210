@@ -352,6 +352,7 @@ void stopFlywheel(void) {
 void activateLauncherAndLoader() {
   InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
+  handleMotors(STATE_FORWARD, STOP_INTERVAL, FORWARD_PULSE);
   while (!TMRArd_IsTimerExpired(TIMER_LAUNCH)) {
     PWM(); 
     Pulse(ONE_QUARTER);
@@ -369,7 +370,13 @@ void stage2() {
     checkLeftRightSensors();
     checkJunction(STATE_PIVOT_L);
   }
-  state = STATE_MOVE_FACTCHECK;
+  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
+  atJunction = false;
+  state = STATE_MOVE_LAUNCH;
+  while (!atJunction) {
+    checkJunction(STATE_FORWARD);
+  }
+  state = STATE_LAUNCH;
 }
 
 void stage3() {
