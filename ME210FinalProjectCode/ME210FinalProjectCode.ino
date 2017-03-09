@@ -107,7 +107,7 @@ bool stateComplete = false;
 bool atJunction = false;
 bool atT = false;
 int leftDifferential = 0;
-int rightDifferential = -10;
+int rightDifferential = -30;
 
 //launcher loader
 int isDCOn = 0; 
@@ -200,28 +200,31 @@ void loop() {
 void handleJunctionTurn(MotionStates_t turnDirection) {
   // called when both left and right sensors (and center) are dark/on tape. Blocks response until robot turns to adjacent tape.
   Serial.println("Entered Turn");
-  Serial.println(analogRead(PIN_SENSOR_RIGHT));
-  Serial.println(analogRead(PIN_SENSOR_LEFT));
   if ((turnDirection == STATE_PIVOT_R) || atT) {
     while (!sensorCenterDark()) {
       handleMotors(turnDirection, TURN_INTERVAL, TURN_PULSE);
       // Turn right till center sensor captures tape to the right.
+      Serial.println("Entered Turn1");
     }
   }
   while (sensorCenterDark()) {
     handleMotors(turnDirection, TURN_INTERVAL, TURN_PULSE);
     // Turn right till center sensor goes off current tape.
+    Serial.println("Entered Turn1");
   }
   while (!sensorCenterDark()) {
     handleMotors(turnDirection, TURN_INTERVAL, TURN_PULSE);
     // Turn right till center sensor captures tape to the right.
+    Serial.println("Entered Turn1");
   }
   if (turnDirection == STATE_PIVOT_L) {
     while (sensorCenterDark()) {
     handleMotors(turnDirection, TURN_INTERVAL, TURN_PULSE);
     // Turn right till center sensor goes off current tape.
+    Serial.println("Entered Turn1");
     }
   }
+  Serial.println("Done");
   countLeft = 0;
   countRight = 0;
   if (turnDirection == STATE_STOP) {
@@ -365,7 +368,7 @@ void stage1() {
 
 void stage2() {
   rightDifferential += 0;
-  while (!atJunction) {
+  while (!atJunction) { /** TO DO: change condition to depend on another flag **/
     handleLineFollowing();
     checkLeftRightSensors();
     checkJunction(STATE_PIVOT_L);
@@ -373,11 +376,11 @@ void stage2() {
   rightDifferential -= 0;
   //move back then move forward and align
   leftDifferential -= 25;
-  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
+  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleLineFollowing();
   }
-  TMRArd_InitTimer(TIMER_STAGE_4, 250);
+  TMRArd_InitTimer(TIMER_STAGE_4, 300);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
   }
@@ -399,62 +402,64 @@ void stage2() {
 }
 
 void stage3() {
-  atT = true;
-  while (atJunction) {
-    handleLineFollowing();
-    checkLeftRightSensors();
-    checkJunction(STATE_PIVOT_L);
-  }
-  while (!atJunction) {
-    handleLineFollowing();
-    checkLeftRightSensors();
-    checkJunction(STATE_PIVOT_L);
-  }
-  atT = false;
-  state = STATE_MOVE_FACTCHECK;
+//  atT = true;
+//  while (atJunction) {
+//    handleLineFollowing();
+//    checkLeftRightSensors();
+//    checkJunction(STATE_PIVOT_L);
+//  }
+//  while (!atJunction) {
+//    handleLineFollowing();
+//    checkLeftRightSensors();
+//    checkJunction(STATE_PIVOT_L);
+//  }
+//  atT = false;
+//  state = STATE_MOVE_FACTCHECK;
 }
 
 void stage4() {
-  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
-  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleLineFollowing();
-  }
-  leftDifferential -= 10;
-  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
-  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
-  }
-  leftDifferential -= 35;
-  //activateLauncherandLoader();
-  TMRArd_InitTimer(TIMER_STAGE_4, 500);
-  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
-  }
-  
-  leftDifferential += 45;
-  state=STATE_MOVE_LAUNCH;
+//  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
+//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+//    handleLineFollowing();
+//  }
+//  leftDifferential -= 10;
+//  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
+//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+//    handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
+//  }
+//  leftDifferential -= 35;
+//  //activateLauncherandLoader();
+//  TMRArd_InitTimer(TIMER_STAGE_4, 500);
+//  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+//    handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
+//  }
+//  
+//  leftDifferential += 45;
+//  state=STATE_MOVE_LAUNCH;
 }
 
 void stage5() {
-  countLeft = countRight = 0;
-  atJunction = false;
-  handleLineFollowing();
-  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-  if ((countLeft && countLeftEnabled) || (countRight && countRightEnabled)) {
-    checkJunction(STATE_FORWARD);
-  }
-  if(atJunction){
-    state = STATE_LAUNCH;
-  }
+//  countLeft = countRight = 0;
+//  atJunction = false;
+//  handleLineFollowing();
+//  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
+//  if ((countLeft && countLeftEnabled) || (countRight && countRightEnabled)) {
+//    checkJunction(STATE_FORWARD);
+//  }
+//  if(atJunction){
+//    state = STATE_LAUNCH;
+//  }
 }
 
 void stage6() {
   activateLauncherAndLoader();
 //  state = STATE_RETURN;
 //  leftDifferential = 30;
+  delay(3000);
+  stopFlywheel();
+  leftDifferential = 0;
+  rightDifferential = -30;
   handleJunctionTurn(STATE_PIVOT_R);
-  isJunction = true;
-  TMRArd_InitTimer(TIMER_ATJUNCTION, TIME_INTERVAL_ATJUNCTION);
   state = STATE_TO_FIRST_JUNCTION;
 }
 
