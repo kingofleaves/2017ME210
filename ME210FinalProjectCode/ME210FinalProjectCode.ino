@@ -21,10 +21,10 @@ stage             Arduino IDE version: 1.6.7
 /*---------------Module Defines-----------------------------*/
 
 #define MOTOR_SPEED    150      // between 0 and 255
-#define MOTOR_PULSE_SPEED  215   // between 0 and 255 // AW: changed from 200 -> 215
+#define MOTOR_PULSE_SPEED  200  // between 0 and 255 // AW: changed from 200 -> 215
 #define FORWARD_INTERVAL 3
 #define TURN_INTERVAL 3
-#define FORWARD_PULSE 40
+#define FORWARD_PULSE 30
 #define TURN_PULSE 20
 
 
@@ -86,7 +86,7 @@ stage             Arduino IDE version: 1.6.7
 
 /*---------------State Definitions--------------------------*/
 typedef enum {
-  STATE_RETURN, STATE_LAUNCH, STATE_RELOAD, STATE_EXIT_SAFESPACE, STATE_MOVE_FACTCHECK, STATE_MOVE_LAUNCH, STATE_OFF
+  STATE_RETURN, STATE_LAUNCH, STATE_RELOAD, STATE_EXIT_SAFESPACE, STATE_MOVE_FACTCHECK, STATE_MOVE_LAUNCH, STATE_OFF, STATE_TO_FIRST_JUNCTION, STATE_UTURN
 } States_t;
 
 typedef enum {
@@ -106,6 +106,7 @@ unsigned int waitCount = 0;
 bool stateComplete = false;
 bool atJunction = false;
 bool atT = false;
+int leftDifferential = 50;
 
 //launcher loader
 int isDCOn = 0; 
@@ -144,7 +145,7 @@ void setup() {
   // Initialize States:
   handleMotors(STATE_FORWARD, 256, FORWARD_PULSE);
   stopFlywheel();
-  state = STATE_MOVE_FACTCHECK;
+  state = STATE_OFF;
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
   TMRArd_StopTimer(TIMER_LAUNCH);
   TMRArd_InitTimer(TIMER_PULSE, FORWARD_PULSE);
@@ -157,67 +158,41 @@ void setup() {
 }
 
 void loop() {
-  if (state != STATE_OFF) {
-    //checkGlobalEvents();
-    //activateLauncherAndLoader(); 
-    // Debugging Code Below
-    if (state==STATE_MOVE_FACTCHECK) {
+  switch (state) {
+    case STATE_EXIT_SAFESPACE:
+      stage1();
+      break;
+    case STATE_TO_FIRST_JUNCTION:
+      stage2();
+      break;
+    case STATE_UTURN:
+      stage3();
+      break;
+    case STATE_MOVE_FACTCHECK:
       stage4();
-    }
-    //Serial.println("Entering Stage 2");
-    //stage2();
-    //Serial.println("Entering Stage 3");
-    //stage3();
-    handleLineFollowing();
-    checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-    checkJunction(STATE_PIVOT_R);
-    if(state == STATE_LAUNCH) {
-      activateLauncherAndLoader();
-    }
-    //Serial.println("looping");
-    
-  
-    // End of Debugging Code
+      break;
+    case STATE_MOVE_LAUNCH:
+      stage5();
+      break;
+    case STATE_LAUNCH:
+      stage6();
+      break;
+    case STATE_RETURN:
+      stage7();
+      break;
+    default:
+      handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
+      break;
   }
 }
 
 /*----------------Module Functions--------------------------*/
 /** WORK IN PROGRESS **/
-void checkGlobalEvents(void) {
-  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-  checkJunction(STATE_PIVOT_R);
-  handleLineFollowing();
-//  switch (state) {
-//    case STATE_MOVE_LAUNCH:
-//      handleLocomotion(STATE_MOVE_LAUNCH);
-//      if (stateComplete) {
-//          state = STATE_LAUNCH;
-//          stateComplete = false;
-//      }
-//      break;
-//    case STATE_LAUNCH:
-//      handleLocomotion(STATE_LAUNCH);
-//      if (stateComplete) {
-//          state = STATE_RELOAD;
-//          stateComplete = false;
-//      }
-//      break;
-//    case STATE_MOVE_FACTCHECK:
-//      handleLocomotion(STATE_MOVE_FACTCHECK);
-//      if (stateComplete) {
-//          state = STATE_MOVE_LAUNCH;
-//          stateComplete = false;
-//      }
-//      break;
-//    case STATE_RELOAD:
-//      handleLocomotion(STATE_RELOAD);
-//      if (stateComplete) {
-//          state = STATE_MOVE_FACTCHECK;
-//          stateComplete = false;      
-//      }
-//      break;
-//  }
-}
+//void checkGlobalEvents(void) {
+//  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
+//  checkJunction(STATE_PIVOT_R);
+//  handleLineFollowing();
+//}
 
 
 /** TESTED AND WORKING **/
@@ -262,14 +237,10 @@ void checkJunction(MotionStates_t turnDirection) {
     Serial.println("Checking Junction");    
     if (sensorRightDark() && sensorLeftDark()) {
       atJunction = true;
-      switch(state) {
-        case STATE_MOVE_LAUNCH:
-          handleMotors(STATE_PIVOT_R, STOP_INTERVAL, TURN_PULSE);
-          state = STATE_LAUNCH;
-          break;
-        default:
-          handleJunctionTurn(turnDirection);
-          break;
+      if (state == STATE_MOVE_LAUNCH) {
+        handleMotors(STATE_PIVOT_R, STOP_INTERVAL, TURN_PULSE);
+      } else {
+        handleJunctionTurn(turnDirection);
       }
       TMRArd_InitTimer(TIMER_ATJUNCTION, TIME_INTERVAL_ATJUNCTION);
     } else if (sensorRightDark()) {
@@ -375,11 +346,119 @@ void stopFlywheel(void) {
   digitalWrite(PIN_LAUNCHER_LEFT, LOW);
 }
 
+
+/** TESTED AND WORKING **/
+void activateLauncherAndLoader() {
+  InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
+  TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
+  while (!TMRArd_IsTimerExpired(TIMER_LAUNCH)) {
+    PWM(); 
+    Pulse(ONE_QUARTER);
+    delay(TIME_PERIOD); 
+  }
+}
+
+void stage1() {
+  state = STATE_TO_FIRST_JUNCTION;
+}
+
+void stage2() {
+  while (!atJunction) {
+    handleLineFollowing();
+    checkLeftRightSensors();
+    checkJunction(STATE_PIVOT_R);
+  }
+  state = STATE_UTURN;
+}
+
+void stage3() {
+  atT = true;
+  while (!atJunction) {
+    handleLineFollowing();
+    checkLeftRightSensors();
+    checkJunction(STATE_PIVOT_R);
+  }
+  atT = false;
+  state = STATE_MOVE_FACTCHECK;
+}
+
+void stage4() {
+  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleLineFollowing();
+  }
+  TMRArd_InitTimer(TIMER_STAGE_4, 5000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*7);
+  }
+  //activateLauncherandLoader();
+  TMRArd_InitTimer(TIMER_STAGE_4, 1000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
+  }
+  state=STATE_MOVE_LAUNCH;
+}
+
+void stage5() {
+  handleLineFollowing();
+  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
+  checkJunction(STATE_FORWARD);
+  state = STATE_LAUNCH;
+}
+
+void stage6() {
+  activateLauncherAndLoader();
+  state = STATE_RETURN;
+  leftDifferential = 30;
+  handleJunctionTurn(STATE_PIVOT_L);
+  atT = true;
+}
+
+void stage7() {
+//  handleLineFollowing();
+//  checkLeftRightSensors();
+//  checkJunction(STATE_PIVOT_LEFT);
+  stage3();
+  stage4();
+  state = STATE_EXIT_SAFESPACE;
+}
+
+// This function handles the loader PWM
+void PWM(){
+  if (TMRArd_IsTimerExpired(TIMER_PWM)){                    // if timer is expired..
+    int launcherSpeed = 1020;                                     // read new pot value
+    if (isDCOn){                                          // then, if DC is on..
+      digitalWrite(PIN_LAUNCHER_RIGHT, LOW);                            // turn it off
+      digitalWrite(PIN_LAUNCHER_LEFT, LOW);
+      isDCOn = 0;                                          
+      TMRArd_InitTimer(TIMER_PWM,(1023-launcherSpeed)/100);     // and reset the timer 
+    }  
+    else {                                                // if DC is off.. 
+      digitalWrite(PIN_LAUNCHER_RIGHT, HIGH);                           // turn it on
+      digitalWrite(PIN_LAUNCHER_LEFT, HIGH);
+      isDCOn = 1;
+      TMRArd_InitTimer(TIMER_PWM,launcherSpeed/100);            // and reset the timer 
+    }
+  }   
+}
+
 /***********************************
  * Function: handleMotors
- * arguments: motion (FORWARD, REVERSE, LEFT, RIGHT, PIVOT_L, PIVOT_R), motorSpeed (0 - 255)
- * 
- * 
+ * arguments: currState (FORWARD, REVERSE, LEFT, RIGHT, PIVOT_L, PIVOT_R), pulseInterval (0-255 or 256 to stop), pulseDur (0 or longer)
+ * Description: this function takes 3 arguments: 
+ * currState, a MotionState which defines the motion of the robot, i.e. which way it moves (outlined below in the table), 
+ * pulseInterval, the number of inactive pulses (no motor motion) between consecutive active pulses, and
+ * pulseDur, the duration (in ms) of each pulse sent to the motor.
+ * ----------------------------------------------------------
+ * MotionState | Right Motor | Left Motor | Described Motion 
+ * ----------------------------------------------------------
+ * FORWARD     | FORWARD     | FORWARD    | Straight Forward 
+ * REVERSE     | REVERSE     | REVERSE    | Straight Backward
+ * LEFT        | FORWARD     | STOPPED    | Left Forward
+ * RIGHT       | STOPPED     | FORWARD    | Right Forward
+ * PIVOT_L     | FORWARD     | REVERSE    | Pivot left on the spot
+ * PIVOT_R     | REVERSE     | FORWARD    | Pivot right on the spot
+ * ---------------------------------------
  * 
  ***********************************/
 /** Tested and working **/
@@ -411,7 +490,7 @@ void handleMotors(MotionStates_t currState, unsigned int pulseInterval, unsigned
         analogWrite(PIN_MOTOR_LEFT, 0);
         //Serial.println("LEFT 0");
       } else {
-        analogWrite(PIN_MOTOR_LEFT, MOTOR_PULSE_SPEED + 30);
+        analogWrite(PIN_MOTOR_LEFT, MOTOR_PULSE_SPEED + leftDifferential);
         //Serial.println("LEFT ++");
       }
       if (currState == STATE_RIGHT) {
@@ -430,238 +509,3 @@ void handleMotors(MotionStates_t currState, unsigned int pulseInterval, unsigned
     TMRArd_InitTimer(TIMER_PULSE, pulseDur);
   }
 }
-
-/** TESTED AND WORKING **/
-void activateLauncherAndLoader() {
-  InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
-  TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
-  while (!TMRArd_IsTimerExpired(TIMER_LAUNCH)) {
-    PWM(); 
-    Pulse(ONE_QUARTER);
-    delay(TIME_PERIOD); 
-  }
-}
-
-void stage2() {
-  while (!atJunction) {
-    handleLineFollowing();
-    checkJunction(STATE_PIVOT_R);
-  }
-}
-
-void stage3() {
-  atT=true;
-  while (!atJunction) {
-    handleLineFollowing();
-    checkJunction(STATE_PIVOT_R);
-  }
-  atT=false;
-}
-
-void stage4() {
-  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
-  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleLineFollowing();
-  }
-  TMRArd_InitTimer(TIMER_STAGE_4, 5000);
-  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*7);
-  }
-  //activateLauncherandLoader();
-  TMRArd_InitTimer(TIMER_STAGE_4, 1000);
-  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
-  }
-  state=STATE_MOVE_LAUNCH;
-}
-
-void stage5() {
-  bool isJunctionReached = false;
-  while (!isJunctionReached) {
-    handleLineFollowing();
-    checkJunction(STATE_PIVOT_R);
-  }
-}
-
-// This function handles the loader PWM
-void PWM(){
-  if (TMRArd_IsTimerExpired(TIMER_PWM)){                    // if timer is expired..
-    int launcherSpeed = 1020;                                     // read new pot value
-        if (isDCOn){                                          // then, if DC is on..
-        digitalWrite(PIN_LAUNCHER_RIGHT, LOW);                            // turn it off
-        digitalWrite(PIN_LAUNCHER_LEFT, LOW);
-        isDCOn = 0;                                          
-        TMRArd_InitTimer(TIMER_PWM,(1023-launcherSpeed)/100);     // and reset the timer 
-        }
-        
-        else {                                                // if DC is off.. 
-        digitalWrite(PIN_LAUNCHER_RIGHT, HIGH);                           // turn it on
-        digitalWrite(PIN_LAUNCHER_LEFT, HIGH);
-        isDCOn = 1;
-        TMRArd_InitTimer(TIMER_PWM,launcherSpeed/100);            // and reset the timer 
-        }
-  }   
-}
-
-/**** old functions that are replaced by others ****/
-
-
-//void handleMoveForward(void) {
-//  digitalWrite(PIN_MOTOR_LEFT_DIR, FORWARD);
-//  digitalWrite(PIN_MOTOR_RIGHT_DIR, FORWARD);
-//  analogWrite(PIN_MOTOR_LEFT, MOTOR_SPEED);
-//  analogWrite(PIN_MOTOR_RIGHT, MOTOR_SPEED);
-//}
-//
-//void handleMoveForwardFromLeft(void) {
-//  digitalWrite(PIN_MOTOR_LEFT_DIR, FORWARD);
-//  digitalWrite(PIN_MOTOR_RIGHT_DIR, FORWARD);
-//  analogWrite(PIN_MOTOR_LEFT, MOTOR_SPEED);
-//  analogWrite(PIN_MOTOR_RIGHT, 0);
-//}
-//
-//void handleMoveForwardFromRight(void) {
-//  digitalWrite(PIN_MOTOR_LEFT_DIR, FORWARD);
-//  digitalWrite(PIN_MOTOR_RIGHT_DIR, FORWARD);
-//  analogWrite(PIN_MOTOR_LEFT, 0);
-//  analogWrite(PIN_MOTOR_RIGHT, MOTOR_SPEED);
-//}
-//
-//void handleStop(void) {
-//  analogWrite(PIN_MOTOR_LEFT, 0);
-//  analogWrite(PIN_MOTOR_RIGHT, 0);
-//}
-//
-//void handleTurnLeft(void) {
-//  digitalWrite(PIN_MOTOR_LEFT_DIR, REVERSE);
-//  digitalWrite(PIN_MOTOR_RIGHT_DIR, FORWARD);
-//  analogWrite(PIN_MOTOR_LEFT, MOTOR_SPEED);
-//  analogWrite(PIN_MOTOR_RIGHT, MOTOR_SPEED);
-//}
-//
-//void handleTurnRight(void) {
-//  digitalWrite(PIN_MOTOR_LEFT_DIR, FORWARD);
-//  digitalWrite(PIN_MOTOR_RIGHT_DIR, REVERSE);
-//  analogWrite(PIN_MOTOR_LEFT, MOTOR_SPEED);
-//  analogWrite(PIN_MOTOR_RIGHT, MOTOR_SPEED);
-//}
-//
-//void handleTurnRightAim(void) {
-//  // Turns right in pulses
-//  if (TMRArd_IsTimerExpired(TIMER_PULSE)) {
-//    if (waitCount < TURN_INCREMENT_RATIO) {
-//      analogWrite(PIN_MOTOR_LEFT, 0);
-//      analogWrite(PIN_MOTOR_RIGHT, 0);
-//      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
-//      waitCount++;
-//    } else {
-//      digitalWrite(PIN_MOTOR_LEFT_DIR, FORWARD);
-//      digitalWrite(PIN_MOTOR_RIGHT_DIR, REVERSE);
-//      analogWrite(PIN_MOTOR_LEFT, MOTOR_PULSE_SPEED);
-//      analogWrite(PIN_MOTOR_RIGHT, MOTOR_PULSE_SPEED);
-//      TMRArd_InitTimer(TIMER_PULSE, TIME_INTERVAL_PULSE);
-//      waitCount = 0;
-//    }
-//  }
-//}
-//
-//void handleForwardAim(void) {
-//  // Moves Forward in pulses
-//  if (TMRArd_IsTimerExpired(TIMER_PULSE)) {
-//    handleMotors(STATE_FORWARD, TEST_MOTOR_SPEED);
-//  }
-//}
-//
-//void handleLocomotion(States_t targetState) {
-//  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
-//  if (!atJunction) checkJunction(RIGHT_TURN);    // check to see we are at a junction
-//  switch (locoState) {          // line following algorithm
-//    case STATE_MOVE_FORWARD_FROM_RIGHT:
-//      handleMoveForwardFromRight();
-//      // should be turning left (right wheel moving forward)
-//      if (!sensorCenterDark()) {
-//        locoState = STATE_PIVOT_RIGHT;
-//        //Serial.println("TR");
-//        delay(1000);
-//      }
-//      break;
-//      
-//    case STATE_MOVE_FORWARD_FROM_LEFT:
-//      handleMoveForwardFromLeft();
-//      // should be turning right (left wheel moving forward)
-//      if (!sensorCenterDark()) {
-//        locoState = STATE_PIVOT_LEFT;
-//        //Serial.println("TL");
-//        delay(1000);
-//      }
-//      break;
-//      
-//    case STATE_PIVOT_RIGHT:
-//      //handleTurnRight();
-//      handleMoveForwardFromLeft();
-//      // Turning right on the spot
-//      if (sensorCenterDark()) {
-//        locoState = STATE_MOVE_FORWARD_FROM_LEFT;
-//        //Serial.println("FFL");
-//        delay(1000);
-//      }
-//      break;
-//      
-//    case STATE_PIVOT_LEFT:
-//      //handleTurnLeft();
-//      handleMoveForwardFromRight();
-//      // Turning left on the spot
-//      if (sensorCenterDark()) {
-//        locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
-//        //Serial.println("FFR");
-//        delay(1000);
-//      }
-//      break;
-//
-//    case STATE_JUNCTION_PIVOT_RIGHT:
-//      handleTurnRight();
-//      // Turning right on the spot
-//      if (countLeft >= 2 && countLeftEnabled && sensorCenterDark()) {
-//        countLeft = 0;
-//        countRight = 0;
-//        locoState = STATE_MOVE_FORWARD_FROM_LEFT;
-//        atJunction = false;
-//        //Serial.println("FFL, L:0 R:0");
-//        delay(1000);
-//      }
-//      break;
-//      
-//    case STATE_JUNCTION_PIVOT_LEFT:
-//      handleTurnLeft();
-//      // Turning left on the spot
-//      if (countRight >= 2 && countRightEnabled && sensorCenterDark()) {
-//        countRight = 0;
-//        countLeft = 0;
-//        locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
-//        atJunction = false;
-//        //Serial.println("FFR, L:0 R:0");
-//        delay(1000);
-//      }
-//      break;
-//      
-//    case STATE_MOVE_FORWARD:
-//      handleMoveForward();
-//      // Both wheels forward
-//      if (sensorCenterDark()) {
-//        locoState = STATE_MOVE_FORWARD_FROM_RIGHT;
-//        //Serial.println("FFR");
-//        delay(1000);
-//      }
-//      break;
-//    case STATE_JUNCTION_STOP:
-//      handleStop();
-//      // Both wheels stop
-//      if (timerLaunchExpired()) {
-//        locoState = STATE_UTURN;
-//        //Serial.println("U-TURN");
-//        delay(1000);
-//      }
-//      break;
-//  }
-//}
-
