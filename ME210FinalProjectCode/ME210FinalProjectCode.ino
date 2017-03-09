@@ -21,7 +21,7 @@ stage             Arduino IDE version: 1.6.7
 /*---------------Module Defines-----------------------------*/
 
 #define MOTOR_SPEED    150      // between 0 and 255
-#define MOTOR_PULSE_SPEED  200  // between 0 and 255 // AW: changed from 200 -> 215
+#define MOTOR_PULSE_SPEED  250  // between 0 and 255 // AW: changed from 200 -> 215
 #define FORWARD_INTERVAL 3
 #define TURN_INTERVAL 3
 #define FORWARD_PULSE 30
@@ -30,7 +30,7 @@ stage             Arduino IDE version: 1.6.7
 
 #define TURN_INCREMENT_RATIO 10
 
-#define SENSOR_THRESHOLD_OFFSET 2*200 // 5/1024 * 2 * 200 ~= 2 V
+#define SENSOR_THRESHOLD_OFFSET 1.5*200 // 5/1024 * 1.5 * 200 ~= 1.5 V
 
 #define RIGHT_TURN true
 #define LEFT_TURN false
@@ -75,7 +75,7 @@ stage             Arduino IDE version: 1.6.7
 #define TIMER_STAGE_4 4
 
 #define TIMER_ATJUNCTION 2
-#define TIME_INTERVAL_ATJUNCTION 10000
+#define TIME_INTERVAL_ATJUNCTION 5000
 
 #define TIMER_PWM 1
 
@@ -106,8 +106,8 @@ unsigned int waitCount = 0;
 bool stateComplete = false;
 bool atJunction = false;
 bool atT = false;
-int leftDifferential = 50;
-
+int leftDifferential = 0;
+int rightDifferential = 0;
 //launcher loader
 int isDCOn = 0; 
 int dir = 0;                                                // Initial direction is LOW
@@ -145,7 +145,7 @@ void setup() {
   // Initialize States:
   handleMotors(STATE_FORWARD, 256, FORWARD_PULSE);
   stopFlywheel();
-  state = STATE_OFF;
+  state = STATE_TO_FIRST_JUNCTION;
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
   TMRArd_StopTimer(TIMER_LAUNCH);
   TMRArd_InitTimer(TIMER_PULSE, FORWARD_PULSE);
@@ -373,10 +373,15 @@ void stage2() {
 
 void stage3() {
   atT = true;
+  while (atJunction) {
+    handleLineFollowing();
+    checkLeftRightSensors();
+    checkJunction(STATE_PIVOT_L);
+  }
   while (!atJunction) {
     handleLineFollowing();
     checkLeftRightSensors();
-    checkJunction(STATE_PIVOT_R);
+    checkJunction(STATE_PIVOT_L);
   }
   atT = false;
   state = STATE_MOVE_FACTCHECK;
@@ -409,7 +414,7 @@ void stage5() {
 void stage6() {
   activateLauncherAndLoader();
   state = STATE_RETURN;
-  leftDifferential = 30;
+//  leftDifferential = 30;
   handleJunctionTurn(STATE_PIVOT_L);
   atT = true;
 }
