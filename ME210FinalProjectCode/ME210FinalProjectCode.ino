@@ -57,6 +57,9 @@ stage             Arduino IDE version: 1.6.7
 #define PIN_STEP 5
 #define PIN_DIR 3 
 
+
+#define IR_REAR A1          
+
 /*---------------Other Defines------------------------------*/
 
 
@@ -65,6 +68,7 @@ stage             Arduino IDE version: 1.6.7
 #define TIME_PERIOD 1
 #define SPEED 200
 
+#define IRRearThreshold 650 
 
 /*---------------Timer Defines------------------------------*/
 
@@ -140,6 +144,8 @@ void stage3(void);
 void stage4(void);
 void stage5(void);
 
+void rotateUntilIR(void);
+
 /*---------------Raptor Main Functions----------------*/
 
 void setup() {
@@ -148,7 +154,7 @@ void setup() {
   // Initialize States:
   handleMotors(STATE_FORWARD, 256, FORWARD_PULSE);
   stopFlywheel();
-  state = STATE_TO_FIRST_JUNCTION;
+  state = STATE_EXIT_SAFESPACE;
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
   TMRArd_StopTimer(TIMER_LAUNCH);
   TMRArd_InitTimer(TIMER_PULSE, FORWARD_PULSE);
@@ -289,7 +295,7 @@ void setupPins() {
   pinMode(PIN_LAUNCHER_RIGHT, OUTPUT); 
   pinMode(PIN_STEP, OUTPUT); 
   pinMode(PIN_DIR, OUTPUT); 
-
+  pinMode(IR_REAR, INPUT);
 
 }
 
@@ -368,9 +374,42 @@ void activateLauncherAndLoader() {
   }
 }
 
-void stage1() {
+void stage1(void){
+  int IRRearReading = 0;
+  IRRearReading = analogRead(IR_REAR);
+  Serial.println(IRRearReading);
+  
+   // Pivots and blocks response until robot hits the sensor.
+  while(IRRearReading < IRRearThreshold){                             
+      handleMotors(STATE_PIVOT_R, TURN_INTERVAL, TURN_PULSE);
+      IRRearReading = analogRead(IR_REAR);
+      Serial.println(IRRearReading);
+  }
+  
+  // When it reaches here, it's aligned with the beacon. Moves forward and blocks response until robot hits the line.
+  while(!sensorRightDark() && !sensorLeftDark()) {
+    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
+    } 
+
+  // When it reaches here, it has hit the line. Straighten out and blocks response until both sensors are on the line.
+  while(!sensorRightDark() || !sensorLeftDark()) {
+        
+    if (sensorRightDark()) {
+      handleMotors(STATE_PIVOT_R, TURN_INTERVAL, TURN_PULSE);
+    } else if (sensorLeftDark()) {
+      handleMotors(STATE_PIVOT_L, TURN_INTERVAL, TURN_PULSE);
+    } else {                                                            // this is because above pivot movements may cause both sensors to go off 
+      handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
+    }
+    } 
+
   state = STATE_TO_FIRST_JUNCTION;
+  TMRArd_InitTimer(TIMER_STAGE_4, 5000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleLineFollowing();
+  }
 }
+
 
 void stage2() {
   rightDifferential += 0;
