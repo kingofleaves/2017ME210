@@ -144,7 +144,7 @@ void setup() {
   // Initialize States:
   handleMotors(STATE_FORWARD, 256, FORWARD_PULSE);
   stopFlywheel();
-  state = STATE_MOVE_LAUNCH;
+  state = STATE_MOVE_FACTCHECK;
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
   TMRArd_StopTimer(TIMER_LAUNCH);
   TMRArd_InitTimer(TIMER_PULSE, FORWARD_PULSE);
@@ -161,10 +161,12 @@ void loop() {
     //checkGlobalEvents();
     //activateLauncherAndLoader(); 
     // Debugging Code Below
-    //stage4();
-    Serial.println("Entering Stage 2");
+    if (state==STATE_MOVE_FACTCHECK) {
+      stage4();
+    }
+    //Serial.println("Entering Stage 2");
     //stage2();
-    Serial.println("Entering Stage 3");
+    //Serial.println("Entering Stage 3");
     //stage3();
     handleLineFollowing();
     checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
@@ -463,13 +465,14 @@ void stage4() {
   }
   TMRArd_InitTimer(TIMER_STAGE_4, 5000);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
-    handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*4);
+    handleMotors(STATE_REVERSE, FORWARD_INTERVAL, FORWARD_PULSE*7);
   }
-  activateLauncherAndLoader();
+  //activateLauncherandLoader();
   TMRArd_InitTimer(TIMER_STAGE_4, 1000);
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE*4);
   }
+  state=STATE_MOVE_LAUNCH;
 }
 
 void stage5() {
