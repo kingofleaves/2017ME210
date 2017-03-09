@@ -24,7 +24,7 @@ stage             Arduino IDE version: 1.6.7
 #define MOTOR_PULSE_SPEED  255  // between 0 and 255 // AW: changed from 200 -> 215
 #define FORWARD_INTERVAL 3
 #define TURN_INTERVAL 5
-#define FORWARD_PULSE 40
+#define FORWARD_PULSE 30
 #define TURN_PULSE 30
 
 
@@ -352,7 +352,6 @@ void stopFlywheel(void) {
 void activateLauncherAndLoader() {
   InitPulse(PIN_STEP, stepPeriod);                          // Prepare to generate pulse stream 
   TMRArd_InitTimer(TIMER_LAUNCH, TIME_INTERVAL_LAUNCH);
-  handleMotors(STATE_FORWARD, STOP_INTERVAL, FORWARD_PULSE);
   while (!TMRArd_IsTimerExpired(TIMER_LAUNCH)) {
     PWM(); 
     Pulse(ONE_QUARTER);
@@ -365,17 +364,37 @@ void stage1() {
 }
 
 void stage2() {
+  rightDifferential += 0;
   while (!atJunction) {
     handleLineFollowing();
     checkLeftRightSensors();
     checkJunction(STATE_PIVOT_L);
   }
-  TMRArd_InitTimer(TIMER_STAGE_4, 4000);
+  rightDifferential -= 0;
+  //move back then move forward and align
+  leftDifferential -= 10;
+  TMRArd_InitTimer(TIMER_STAGE_4, 3000);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleLineFollowing();
+  }
+  TMRArd_InitTimer(TIMER_STAGE_4, 250);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_REVERSE, 0, FORWARD_PULSE);
+  }
+  TMRArd_InitTimer(TIMER_STAGE_4, 200);
+  while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleMotors(STATE_REVERSE, 256, FORWARD_PULSE);
+  }
+  leftDifferential +=10;
+  //activateLauncherandLoader();
   atJunction = false;
   state = STATE_MOVE_LAUNCH;
   while (!atJunction) {
-    checkJunction(STATE_FORWARD);
+//    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
+    handleLineFollowing();
+    checkJunction(STATE_PIVOT_L);
   }
+  handleMotors(STATE_FORWARD, STOP_INTERVAL, FORWARD_PULSE);
   state = STATE_LAUNCH;
 }
 
@@ -411,6 +430,7 @@ void stage4() {
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
   }
+  
   leftDifferential += 45;
   state=STATE_MOVE_LAUNCH;
 }
