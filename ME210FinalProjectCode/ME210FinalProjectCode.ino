@@ -414,6 +414,7 @@ void stage6() {
   atT = true;
 }
 
+/*** IN PROGRESS ***/
 void stage7() {
 //  handleLineFollowing();
 //  checkLeftRightSensors();
