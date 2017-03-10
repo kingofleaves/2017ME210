@@ -88,10 +88,10 @@ stage             Arduino IDE version: 1.6.7
 
 
 
-
+ 
 /*---------------State Definitions--------------------------*/
 typedef enum {
-  STATE_RETURN, STATE_LAUNCH, STATE_RELOAD, STATE_EXIT_SAFESPACE, STATE_MOVE_FACTCHECK, STATE_MOVE_LAUNCH, STATE_OFF, STATE_TO_FIRST_JUNCTION, STATE_UTURN
+  STATE_RETURN, STATE_LAUNCH, STATE_RELOAD, STATE_EXIT_SAFESPACE, STATE_MOVE_FACTCHECK, STATE_MOVE_LAUNCH, STATE_OFF, STATE_TO_FIRST_JUNCTION, STATE_UTURN, STATE_TEST
 } States_t;
 
 typedef enum {
@@ -169,6 +169,7 @@ void setup() {
 void loop() {
   switch (state) {
     case STATE_EXIT_SAFESPACE:
+      Serial.println("stage 1");
       stage1();
       break;
     case STATE_TO_FIRST_JUNCTION:
@@ -249,12 +250,12 @@ void checkJunction(MotionStates_t turnDirection) {
     Serial.println("Checking Junction");    
     if (sensorRightDark() && sensorLeftDark()) {
       atJunction = true;
-      if (state == STATE_MOVE_LAUNCH) {
+      if (state == STATE_MOVE_LAUNCH || state == STATE_TEST) {
         while (!sensorCenterDark()) {
           handleLineFollowing();
         }
         handleMotors(STATE_PIVOT_R, STOP_INTERVAL, TURN_PULSE);
-      } else {
+       } else {
         handleJunctionTurn(turnDirection);
       }
       TMRArd_InitTimer(TIMER_ATJUNCTION, TIME_INTERVAL_ATJUNCTION);
@@ -377,31 +378,32 @@ void activateLauncherAndLoader() {
 void stage1(void){
   int IRRearReading = 0;
   IRRearReading = analogRead(IR_REAR);
-  Serial.println(IRRearReading);
-  
+  handleMotors(STATE_PIVOT_R, 0, 40);
+//  Serial.println(IRRearReading);
+//  
    // Pivots and blocks response until robot hits the sensor.
   while(IRRearReading < IRRearThreshold){                             
-      handleMotors(STATE_PIVOT_R, TURN_INTERVAL, TURN_PULSE);
-      IRRearReading = analogRead(IR_REAR);
+      handleMotors(STATE_PIVOT_R, 3, 40);
+      IRRearReading = analogRead( IR_REAR);
       Serial.println(IRRearReading);
   }
   
   // When it reaches here, it's aligned with the beacon. Moves forward and blocks response until robot hits the line.
   while(!sensorRightDark() && !sensorLeftDark()) {
-    handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
+    handleMotors(STATE_FORWARD, 3, 25);
     } 
 
   // When it reaches here, it has hit the line. Straighten out and blocks response until both sensors are on the line.
   while(!sensorRightDark() || !sensorLeftDark()) {
         
     if (sensorRightDark()) {
-      handleMotors(STATE_PIVOT_R, TURN_INTERVAL, TURN_PULSE);
+      handleMotors(STATE_PIVOT_R, 3, 40);
     } else if (sensorLeftDark()) {
-      handleMotors(STATE_PIVOT_L, TURN_INTERVAL, TURN_PULSE);
+      handleMotors(STATE_PIVOT_L, 3, 40);
     } else {                                                            // this is because above pivot movements may cause both sensors to go off 
-      handleMotors(STATE_FORWARD, FORWARD_INTERVAL, FORWARD_PULSE);
+      handleMotors(STATE_FORWARD, 3, 40);
     }
-    } 
+  } 
 
   state = STATE_TO_FIRST_JUNCTION;
   TMRArd_InitTimer(TIMER_STAGE_4, 5000);
@@ -410,6 +412,20 @@ void stage1(void){
   }
 }
 
+void stage2test() {
+  state = STATE_TEST;
+  rightDifferential += 0;
+  while (!atJunction) { 
+    handleLineFollowing();
+    checkLeftRightSensors();
+    checkJunction(STATE_PIVOT_L);
+  }
+  TMRArd_InitTimer(TIMER_STAGE_4, 2000);
+   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
+    handleLineFollowing();
+  }
+  state = STATE_LAUNCH;
+}
 
 void stage2() {
   rightDifferential += 0;
@@ -485,7 +501,7 @@ void stage4() {
 
 void stage5() {
 //  countLeft = countRight = 0;
-//  atJunction = false;
+//  atJunct ion = false;
 //  handleLineFollowing();
 //  checkLeftRightSensors();      // check left and right sensors to keep tabs on position relative to junctions
 //  if ((countLeft && countLeftEnabled) || (countRight && countRightEnabled)) {
