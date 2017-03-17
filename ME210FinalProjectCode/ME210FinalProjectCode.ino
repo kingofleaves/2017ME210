@@ -83,7 +83,6 @@ stage             Arduino IDE version: 1.6.7
 #define TIME_INTERVAL_ATJUNCTION 5000
 
 #define TIMER_PWM 5
-#define TIMER_END_PROGRAM 6
 
 #define STOP_INTERVAL 256
 
@@ -170,6 +169,7 @@ void setup() {
 void loop() {
   switch (state) {
     case STATE_EXIT_SAFESPACE:
+      Serial.println("stage 1");
       stage1();
       break;
     case STATE_TO_FIRST_JUNCTION:
@@ -494,9 +494,7 @@ void stage4() {
   while (!TMRArd_IsTimerExpired(TIMER_STAGE_4)) {
     handleMotors(STATE_FORWARD, 0, FORWARD_PULSE);
   }
-  while (true) {
-    handleMotors(STATE_FORWARD, STOP_INTERVAL, FORWARD_PULSE);
-  }
+  
   leftDifferential += 45;
   state=STATE_MOVE_LAUNCH;
 }
